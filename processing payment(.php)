@@ -1,0 +1,104 @@
+//THIS FUNCTION IS TO PROCESS PAYMENT FOR BLUSALT
+	public function process_blusalt()
+	{
+
+        /**This 'if'condition below checks if payment button is set -- this can also refer to case of several payment options but blusalt is selected in a radio-button 
+        then run the following commands **/
+        
+		if (isset($_POST['blusalt'])) {
+
+			      /**  get customer details if logged in, this would be needed to be saved in your DB, depending on how your  project is set up ,
+              "get_customers_details($_SESSION['customerID'])" is a function defined below **/
+            
+      			if ($_SESSION['customerID']) {
+      				$customer = $this->get_customers_details($_SESSION['customerID']);
+      			}
+
+			    $gateway =[
+                    'publicKey' => 'your public key given to you from blusalt',
+                    'secretKey' => 'your secret key given to you from blusalt'
+          ];
+
+			    /** you would need to get amounts paid by your customer for reference purpose, and also DB storage **/
+		  	$amount = (int)$_POST['aount'];
+			  $payment_reason = $_POST['payment_reason'];
+			
+
+          /** GET URL LINK, yes your sites link, this can be defined as to how you have set you link **/
+    			$link = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ?
+    				"https" : "http") . "://" . $_SERVER['SERVER_NAME'];
+
+        
+  		  /** craft a reference for the payment, here i generate random number using this inbuilt function 'quite necessary' **/
+  			$reference = mt_rand(1000000000000, 9999999999999);
+
+        /** get your response url, this is the url to return too when payment is successful **/
+			  $callback = URL . '/checkoutpay/success/' . $reference . '/';
+
+        /** Blusalts URL/END-POINT with which your project would interract with **/
+        $url = 'https://wallets.blusalt.net/checkout/initialize';
+
+
+        /** Blusalt endpoint is set to accept parameters sent as associative arrays, hence you address all your previous variables in this array format **/ 
+        /** NB: walletId is always 'master' **/
+        /** NB: the custom_fields below ARE OPTIONAL **/
+
+        $data = [
+				'walletId' => "master",
+				'returnUrl' => $callback,
+				'currency' => "NGN",
+				'amount' => $amount,
+				'metadata' => (object)[
+					'reference' => $reference,
+					'custom_fields' => [
+						(object)[
+							'display_name' => "Customer",
+							'variable_name' => "customer",
+							'value' => $name
+						],
+						(object)[
+							'display_name' => "Contact No.",
+							'variable_name' => "contact no.",
+							'value' => $phone
+						],
+						(object)[
+							'display_name' => "Delivery Address",
+							'variable_name' => "delivery address",
+							'value' => $address
+						]
+					]
+				]
+      ];
+
+        /** TAKE NOTE: you would need to json_encode $data, this would convert php-array/object to corresponding JSON array/object to be sent **/
+        $data_encoded = json_encode($data);
+
+        /** NOW OPEN A CONNECTION TO BLUSALT BY INITIALING CURL **/
+		  	$ch = curl_init();
+
+			/** set the $url, number of POST vars, POST data **/
+
+			curl_setopt($ch, CURLOPT_URL, $url);
+			curl_setopt($ch, CURLOPT_POST, true);
+			curl_setopt($ch, CURLOPT_POSTFIELDS, $data_encoded);
+			curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+				"Authorization: " . $gateway['publicKey'],
+				"Content-Type: application/json"
+			));
+
+			/** have your (curl_setopt) So that 'curl_exec' returns the contents of the cURL, rather than echoing it **/ 
+
+			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+			/** execute post $ch and store result in the variable (wether payment was successful or not) **/
+			$result = curl_exec($ch);
+
+      /** after execution, 'decode' function takes result back to the corresponding php type **/
+			$result = json_decode($result);
+
+
+			if ($result->status == false) {
+				echo $result->message;
+				exit();
+			}
+			
